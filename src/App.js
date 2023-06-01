@@ -1,6 +1,11 @@
-import React, { useState } from 'react';
-import { BrowserRouter as Router, Route, Link, Routes } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+//import { BrowserRouter as Router, Route, Link, Routes } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import './App.css';
+
+import { auth } from './firebaseAuth';
+import firebase from 'firebase/compat/app';
+import 'firebase/compat/auth';
 
 // Sample data
 const initialImages = [
@@ -25,11 +30,54 @@ const initialImages = [
 ];
 
 
+function SignInWithGoogle() {
+    const provider = new firebase.auth.GoogleAuthProvider();
+    auth.signInWithPopup(provider);
+}
+
+function SignInWithEmailPassword(email, password) {
+    auth.signInWithEmailAndPassword(email, password);
+}
+
+function SignUpWithEmailPassword(email, password) {
+    auth.createUserWithEmailAndPassword(email, password);
+}
+
+function SignUpPage() {
+    return (
+        <div className="signup-form">
+            <h2>Sign Up</h2>
+            <form onSubmit={(e) => {
+                e.preventDefault();
+                SignUpWithEmailPassword(e.target.email.value, e.target.password.value);
+            }}>
+                <input name="email" type="email" placeholder="Email" />
+                <input name="password" type="password" placeholder="Password" />
+                <button type="submit">Sign up</button>
+            </form>
+        </div>
+    );
+}
+
+
 function App() {
     const [images, setImages] = useState(initialImages);
     const [selectedImage, setSelectedImage] = useState(null);
     const [isExpanded, setExpanded] = useState(false);
+    const [user, setUser] = useState(null);
 
+    useEffect(() => {
+        const unsubscribe = auth.onAuthStateChanged((user) => {
+            if (user) {
+                setUser(user);
+            } else {
+                setUser(null);
+            }
+        });
+
+
+        return () => unsubscribe();
+    }, []);
 
     const handleLike = (id) => {
         setImages((prevImages) =>
@@ -37,7 +85,7 @@ function App() {
                 image.id === id ? { ...image, isLiked: !image.isLiked } : image
             )
         );
-    
+
         setSelectedImage((prevSelectedImage) =>
             prevSelectedImage && prevSelectedImage.id === id
                 ? { ...prevSelectedImage, isLiked: !prevSelectedImage.isLiked }
@@ -55,38 +103,77 @@ function App() {
         setExpanded(false);
     };
 
-
+    const handleSignOut = () => {
+        auth.signOut();
+    };
 
     return (
         <div className="App">
             <header className="App-header">
                 <h1>Ptuxiakh Manwlh</h1>
-            </header>
-            <div className="masonry">
-                {images.map(image => (
-                    <div key={image.id} className="image-item" onClick={() => handleSelect(image)}>
-                        <img src={image.url} alt="" />
-                        <div className="image-item-info">
-                            <button onClick={(e) => { e.stopPropagation(); handleLike(image.id); }}>
-                                {image.isLiked ? "❤️" : "🤍"}
-                            </button>
-                        </div>
+                {user && (
+                    <div className="user-info">
+                        <img src={user.photoURL} alt="User" />
+                        <span>{user.displayName}</span>
+                        <button className="logout-button" onClick={handleSignOut}>Logout</button>
                     </div>
-                ))}
-                {selectedImage && isExpanded && (
-                    <div className="expandedImage" onClick={(e) => e.target === e.currentTarget && handleDeselect()}>
-                        <div className="expandedImageContainer">
-                            <img src={selectedImage.url} alt="" />
+                )}
+            </header>
+            {user ? (
+                // User is signed in, render the main app
+                <div className="masonry">
+                    {images.map(image => (
+                        <div key={image.id} className="image-item" onClick={() => handleSelect(image)}>
+                            <img src={image.url} alt="" />
                             <div className="image-item-info">
-                                <button onClick={(e) => { e.stopPropagation(); handleLike(selectedImage.id); }}>
-                                    {selectedImage.isLiked ? "❤️" : "🤍"}
+                                <button onClick={(e) => { e.stopPropagation(); handleLike(image.id); }}>
+                                    {image.isLiked ? "❤️" : "🤍"}
                                 </button>
                             </div>
                         </div>
+                    ))}
+                    {selectedImage && isExpanded && (
+                        <div className="expandedImage" onClick={(e) => e.target === e.currentTarget && handleDeselect()}>
+                            <div className="expandedImageContainer">
+                                <img src={selectedImage.url} alt="" />
+                                <div className="image-item-info">
+                                    <button onClick={(e) => { e.stopPropagation(); handleLike(selectedImage.id); }}>
+                                        {selectedImage.isLiked ? "❤️" : "🤍"}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            ) : (
+                // User is signed out, render the sign in/sign up forms
+                <div className="login-section">
+                    <div className="login-form">
+                        <h2>Sign In</h2>
+                        <button onClick={SignInWithGoogle}>Sign in with Google</button>
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            SignInWithEmailPassword(e.target.email.value, e.target.password.value);
+                        }}>
+                            <input name="email" type="email" placeholder="Email" />
+                            <input name="password" type="password" placeholder="Password" />
+                            <button type="submit">Sign in</button>
+                        </form>
                     </div>
-                )}
-    
-            </div>
+                    <div className="signup-form">
+                        <h2>Sign Up</h2>
+                        <form onSubmit={(e) => {
+                            e.preventDefault();
+                            SignUpWithEmailPassword(e.target.email.value, e.target.password.value, e.target.name.value);
+                        }}>
+                            <input name="email" type="email" placeholder="Email" />
+                            <input name="password" type="password" placeholder="Password" />
+                            <input name="name" type="text" placeholder="Your Name" />
+                            <button type="submit">Sign up</button>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
